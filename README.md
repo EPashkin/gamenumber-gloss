@@ -1,5 +1,7 @@
-GameNumber
+GameNumber-gloss [![Build Status](https://secure.travis-ci.org/EPashkin/gamenumber-gloss.png?branch=master)](http://travis-ci.org/EPashkin/gamenumber-gloss)
 ====
+GUI for GameNumber on graphics engine gloss
+
 GameNumber is simple game with AI players
 
 Controls
@@ -12,6 +14,8 @@ Controls
 | F3 | load game
 | p | pause \ unpause
 | s | shield action
+| + | increase game speed
+| - | decrease game speed
 
 Termins
 ----
@@ -47,3 +51,13 @@ Shield protects players cell from attacks for cost of free points.
 Shield must be charged up to 128 and then activated.
 
 Activated shield can be disabled to accumulate free points and then turned back on without spending free points.
+
+Building GameNumber-gloss
+----
+'''
+git clone https://github.com/EPashkin/gamenumber-gloss.git
+git submodule update --init --recursive
+./init-sandbox.sh
+cabal install
+'''
+After build you can 'cabal run' or 'gamenumber-gloss' to launch game
