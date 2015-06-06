@@ -1,7 +1,7 @@
 module View.Convert where
 
 import Control.Lens
-import GameLogic.Data.Facade
+import GameLogic
 
 --TODO: config
 drawScale = 8 * 4 :: Float
@@ -12,16 +12,23 @@ playerInfoWidth = panelWidth*0.9
 playerInfoHeight = 20 :: Float
 mapSize = 64 :: Float
 
-windowPosOfWorldPos :: Game -> WorldPos -> (Float, Float)
+type Coord = Float
+
+windowPosOfWorldPos :: GameData -> WorldPos -> (Coord, Coord)
 windowPosOfWorldPos game pos =
    let centerPos' = view centerPos game
        xf = (fromIntegral (fst (pos - centerPos')) - 0.5) * drawScale
        yf = (fromIntegral (snd (pos - centerPos')) - 0.5) * drawScale
    in (xf, yf)
 
-worldPosOfWindowPos :: Game -> (Float, Float) -> WorldPos
-worldPosOfWindowPos game (x, y) =
+worldPosOfWindowPos :: (Coord, Coord) -> GameData -> WorldPos
+worldPosOfWindowPos (x, y) game =
    let centerPos' = view centerPos game
        xi = floor (x / drawScale + 0.5) + fst centerPos'
        yi = floor (y / drawScale + 0.5) + snd centerPos'
    in (xi, yi)
+
+--position of minimap in panel
+shiftMiniMap :: Coord -> (Coord, Coord)
+shiftMiniMap height = (8, 15 - halfHeight)
+    where halfHeight = height / 2

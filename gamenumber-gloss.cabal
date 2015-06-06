@@ -11,6 +11,8 @@ category:            Game
 build-type:          Simple
 extra-source-files:  README.md
 cabal-version:       >=1.10
+data-dir:            data
+data-files:          not-delete.txt
 
 executable gamenumber-gloss
   main-is:             Main.hs

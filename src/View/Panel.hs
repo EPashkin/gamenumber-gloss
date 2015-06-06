@@ -5,12 +5,12 @@ module View.Panel
 import Control.Lens
 import View.State
 import View.Convert
-import GameLogic.Data.Facade
+import GameLogic
 import Middleware.Gloss.Facade
 
 --TODO: Pause checkbox
 --TODO: Collapsible panel
-drawPanel :: State -> Picture
+drawPanel :: ViewData -> Picture
 drawPanel state =
     let size = state ^. windowSize
         width = fromIntegral $ fst size
@@ -22,13 +22,14 @@ drawPanel state =
         positionPic = Translate (-panelWidth/2.2) (halfHeight - 20) $ drawPosition state
         playerPicts = mapP drawPlayer $ state ^. game . players
         playersPict = Translate 0 (halfHeight - 30) $ Pictures playerPicts
-        pausedPict  = Translate 0 (20 - halfHeight) $ drawPaused state
-        miniMapPict = Translate (-panelWidth/2.2) (35 - halfHeight)
+        pausedPict  = Translate 5 (20 - halfHeight) $ drawPaused state
+        speedPict  = Translate (-5) (40 - halfHeight) $ drawGameSpeed state
+        miniMapPict = Translate (-panelWidth/2.2) (15 - halfHeight)
                       $ drawMiniMap $ state ^. game
     in Translate shiftX 0 $ Pictures [rect, positionPic, playersPict, miniMapPict
-                                     , pausedPict]
+                                     , pausedPict, speedPict]
 
-drawPosition :: State -> Picture
+drawPosition :: ViewData -> Picture
 drawPosition state
     = Color black $ Scale panelTextScale panelTextScale $ Text str
     where str = "Position: " ++ show x ++ "x" ++ show y
@@ -56,8 +57,8 @@ drawInfoText :: String -> Picture
 drawInfoText = Translate 0 (-playerInfoHeight/2)
                . Scale panelTextScale panelTextScale . Text
 
-remainText :: Player -> String
-remainText player = show $ view remain player `div` remainDivMult
+--remainText :: Player -> String
+--remainText player = show $ (view remain player) `div` remainDivMult
 
 shieldText :: Player -> String
 shieldText player
@@ -78,14 +79,14 @@ aggrText player
     = ""
     where aggro = player ^. aggr
 
-drawPaused :: State -> Picture
+drawPaused :: ViewData -> Picture
 drawPaused state
     | state ^. game . paused
     = Color black $ drawInfoText "PAUSED"
     | otherwise
     = Blank
 
-drawMiniMap :: Game -> Picture
+drawMiniMap :: GameData -> Picture
 drawMiniMap game = Pictures cells
     where cells = mapW (drawMiniMapCell mapCellScale) w
           --swap for testing drawing speed degradation
@@ -106,3 +107,34 @@ drawMiniMapCell mapCellScale (pos, cell)
              in Translate xx yy pict
           rect = rectangleSolid mapCellScale mapCellScale
           color = playerColor $ cell ^. playerIndex
+
+drawGameSpeed :: ViewData -> Picture
+drawGameSpeed state = do
+    let gs = state ^. game . gameSpeed
+        panelFontSize = 15
+        gaudgeLeft = panelWidth * 0.065
+        gaudgeWidth = panelWidth * 0.3
+        gaudgeStep = gaudgeWidth / fromIntegral (fromEnum (maxBound :: GameSpeed))
+        gaudgeTop = panelFontSize * 1.5 
+        gaudgeHeight = panelFontSize
+        gaudgePos sp = gaudgeLeft + gaudgeStep * fromIntegral (fromEnum sp)
+        pText = Translate (-10) (gaudgeHeight + panelFontSize) . Color black
+            $ drawInfoText "Game speed"
+        pHLine = translate 0 (gaudgeHeight / 2) . Color black 
+            $ Line [(gaudgeLeft, 0), (gaudgeLeft + gaudgeWidth, 0)]
+        pVLines = Color black $ Pictures
+            [Line [(x, 0), (x, gaudgeHeight)]
+            | sp <- enumFrom (minBound :: GameSpeed)
+            , let x = gaudgePos sp]
+        pMarker = translate (gaudgePos gs) 0 $ drawGameSpeedMarker gaudgeHeight
+    Pictures [pText, pHLine, pVLines, pMarker]
+
+drawGameSpeedMarker :: Float -> Picture
+drawGameSpeedMarker gaudgeHeight
+    = Color gray $ Polygon [ (0, gaudgeHeight)
+                           , (-hw, gaudgeHeight-hw)
+                           , (-hw, 0)
+                           , (hw, 0)
+                           , (hw, gaudgeHeight-hw)
+                           ]
+    where hw = 5

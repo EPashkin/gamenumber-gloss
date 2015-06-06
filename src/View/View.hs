@@ -6,11 +6,10 @@ import Control.Lens
 import View.State
 import View.Panel
 import View.Convert
-import GameLogic.Data.Facade
-import GameLogic.Util
+import GameLogic
 import Middleware.Gloss.Facade
 
-drawState :: State -> IO Picture
+drawState :: ViewData -> IO Picture
 drawState state = do 
   let visibleR = visibleRange state
   world <- drawGame visibleR $ state ^. game
@@ -18,7 +17,7 @@ drawState state = do
   let panel = drawPanel state 
   return . Pictures $ world' : [panel]
 
-drawGame :: (WorldPos, WorldPos) -> Game -> IO Picture
+drawGame :: (WorldPos, WorldPos) -> GameData -> IO Picture
 drawGame visibleR game = do
    let cells = mapWR drawCell visibleR $ game ^. world
    let halfScale = drawScale / 2
@@ -46,10 +45,10 @@ drawCell (pos, cell)
                 . Text . show $ cell ^. value
       in translateCell pos . Color color . Pictures $ rect : [ txt ]
 
-drawSelecteds :: Game -> [Picture]
+drawSelecteds :: GameData -> [Picture]
 drawSelecteds game = mapPIndices (drawSelected game) $ game ^. players
 
-drawSelected :: Game -> Int -> Picture
+drawSelected :: GameData -> Int -> Picture
 drawSelected game playerIndex
    | num' > 0
    || playerIndex == activePlayerIndex
@@ -78,7 +77,7 @@ translateCell (x,y) pict =
        yy = (fromIntegral y - 0.5) * drawScale
    in Translate xx yy pict
 
-visibleRange :: State -> (WorldPos, WorldPos)
+visibleRange :: ViewData -> (WorldPos, WorldPos)
 visibleRange state = ((minX, minY), (maxX, maxY))
     where game' = state ^. game
           Just pl = game' ^? players. ix activePlayerIndex
