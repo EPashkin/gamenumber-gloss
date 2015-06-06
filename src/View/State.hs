@@ -4,85 +4,110 @@ module View.State where
 import Debug.Trace
 import Control.Lens
 import Middleware.Gloss.Facade (Picture)
-import GameLogic.Data.Facade
-import GameLogic.Logic
-import GameLogic.StartLogic
-import GameLogic.Action.ModifyPlayer
-import GameLogic.Action.Shield
+import GameLogic
 import View.Convert
+import Paths_gamenumber_gloss
 
-data State = State { _game :: Game
+
+data ViewData = ViewData { _game :: GameData
                    , _windowSize :: (Int, Int) -- current window size
                    }
   deriving (Show)
   
-makeLenses ''State
+makeLenses ''ViewData
 
-newState :: IO State
+type ViewAction = ViewData -> ViewData
+type ViewActionIO = ViewData -> IO ViewData
+type WindowAction a = (Coord, Coord) -> ViewAction
+type WindowGameAction a = (Coord, Coord) -> GameState a
+type PanelAction a = Coord -> WindowGameAction a
+
+newState :: IO ViewData
 newState = do
     --runStartupTest
     game <- newGame
-    return $ State game (100, 100)
+    return $ ViewData game (100, 100)
 
 runStartupTest = do
     traceIO "Testing"
     traceIO . show $ getNearestPoses (2,3)
 
-runGameStep :: Float -> State -> IO State
-runGameStep _ = return . over game doGameStep
+runGameStep :: Float -> ViewActionIO
+runGameStep _ = return . over game (execState doGameStep)
 
-startPlacement :: (Float, Float) -> State -> State
+startPlacement :: WindowAction ()
 startPlacement pos = set placementModeOfGame True . doWithWindowPos doSelectCellAction pos
 
-stopPlacement :: State -> State
+stopPlacement :: ViewAction
 stopPlacement = set placementModeOfGame False
 
-inPlacementMode :: State -> Bool
+inPlacementMode :: ViewData -> Bool
 inPlacementMode = view placementModeOfGame 
 
-placementModeOfGame :: Lens' State Bool
+placementModeOfGame :: Lens' ViewData Bool
 placementModeOfGame = game . placementMode
 
-centering :: (Float, Float) -> State -> State
-centering = doWithWindowPos setCenterPosLimited
+centering :: WindowAction ()
+centering = doWithWindowPos2 setCenterPosLimited setCenterPosByMiniMap
 
-drawing :: (Float, Float) -> State -> State
+setCenterPosByMiniMap :: PanelAction ()
+setCenterPosByMiniMap height (x, y) =
+    setCenterPosOnMiniMap (x - dx, y - dy)
+    where (dx, dy) = shiftMiniMap height
+
+setCenterPosOnMiniMap :: WindowGameAction ()
+setCenterPosOnMiniMap (x, y) = setCenterPos (floor x, floor y)
+
+drawing :: WindowAction ()
 drawing = doWithWindowPos doSelectCellAction
 
-updateWindowSize :: (Int, Int) -> State -> State
+updateWindowSize :: (Int, Int) -> ViewAction
 updateWindowSize = set windowSize
 
-doSave :: State -> IO State
+saveFileName :: IO FilePath
+saveFileName = getDataFileName "gamenumber.gn"
+
+doSave :: ViewActionIO
 doSave state = do 
-    doSaveGame "gamenumber.gn" $ state ^. game
+    fileName <- saveFileName
+    doSaveGame fileName $ state ^. game
     return state
 
-doLoad :: State -> IO State
+doLoad :: ViewActionIO
 doLoad state = do
     let g = state ^. game
-    g' <- doLoadGame "gamenumber.gn" g
+    fileName <- saveFileName
+    g' <- doLoadGame fileName g
     return $ set game g' state
 
-doHelpPlayer :: State -> State
+doHelpPlayer :: ViewAction
 doHelpPlayer state
-    = state & game .~ g'
-    where g = state ^. game
-          Just g' = decreaseGamePlayerFree activePlayerIndex (-10, g)
+    = state & game %~ execState (helpPlayer activePlayerIndex)
 
-doChangePaused :: State -> State
+doChangePaused :: ViewAction
 doChangePaused = game . paused %~ not
 
-doShieldAction :: State -> State
-doShieldAction state = state & game %~ shieldAction activePlayerIndex
+doShieldAction :: ViewAction
+doShieldAction state = state & game %~ execState (shieldAction activePlayerIndex)
 
-doWithWindowPosOnGame :: (WorldPos -> Game -> Game) -> (Float, Float) -> Game-> Game
-doWithWindowPosOnGame action pos game = action pos' game
-    where pos' = worldPosOfWindowPos game pos
+increaseSpeed :: ViewAction
+increaseSpeed = game . gameSpeed %~ succ'
+    where succ' gs = if gs == maxBound then gs
+                     else succ gs
 
-doWithWindowPosInField :: (WorldPos -> Game -> Game) -> (Float, Float) -> State -> State
-doWithWindowPosInField action pos = game %~ doWithWindowPosOnGame action pos
+decreaseSpeed :: ViewAction
+decreaseSpeed = game . gameSpeed %~ pred'
+    where pred' gs = if gs == minBound then gs
+                     else pred gs
 
-doWithWindowPos :: (WorldPos -> Game-> Game) -> (Float, Float) -> State -> State
+doWithWindowPosOnGame :: WorldAction -> WindowGameAction ()
+doWithWindowPosOnGame action pos = gets (worldPosOfWindowPos pos) >>= action
+
+doWithWindowPosInField :: WorldAction -> WindowAction ()
+doWithWindowPosInField action pos =
+    game %~ execState (doWithWindowPosOnGame action pos)
+
+doWithWindowPos :: WorldAction -> WindowAction ()
 doWithWindowPos action pos@(x, y) state
     | inPanel pos state
     = state
@@ -90,12 +115,28 @@ doWithWindowPos action pos@(x, y) state
     = doWithWindowPosInField action pos' state
     where pos' = (x - worldShiftX, y)
 
-inPanel :: (Float, Float) -> State -> Bool
+doWithWindowPos2 :: WorldAction -> PanelAction () -> WindowAction ()
+doWithWindowPos2 action panelAction pos@(x, y) state
+    | inPanel pos state
+    = doWithWindowPosInPanel panelAction pos state
+    | otherwise
+    = doWithWindowPosInField action pos' state
+    where (w, h) = view windowSize state
+          pos' = (x - worldShiftX, y)
+
+doWithWindowPosInPanel :: PanelAction () -> WindowAction ()
+doWithWindowPosInPanel panelAction (x, y) state =
+    state & game %~ f
+    where x' = x - panelLeftX state
+          (_, h) = state ^. windowSize
+          f = execState $ panelAction (fromIntegral h) (x', y)
+
+inPanel :: (Coord, Coord) -> ViewData -> Bool
 inPanel (x, y) state = x >= panelLeftX state
 
-panelLeftX :: State -> Float
+panelLeftX :: ViewData -> Coord
 panelLeftX state = width/2 - panelWidth
     where size = state ^. windowSize
           width = fromIntegral $ fst size
 
-worldShiftX = - panelWidth / 2 :: Float
+worldShiftX = - panelWidth / 2 :: Coord

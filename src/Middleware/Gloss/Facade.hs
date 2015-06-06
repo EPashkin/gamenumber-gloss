@@ -1,17 +1,21 @@
 module Middleware.Gloss.Facade (module G
     , emptyCellColor
     , panelBkColor
-    , playerColor) where
+    , playerColor
+    , gray
+    ) where
 
 import Graphics.Gloss.Interface.IO.Game as G
 
-emptyCellColor = makeColor8 100 100 100 255
+emptyCellColor = makeColorI 100 100 100 255
 
-panelBkColor = makeColor8 212 208 200 255
+panelBkColor = makeColorI 212 208 200 255
+
+gray = greyN 0.5
 
 playerColor playerInd = 
     let (r, g, b) = playerColor' playerInd
-    in makeColor8 (r*4) (g*4) (b*4) 255
+    in makeColorI (r*4) (g*4) (b*4) 255
 
 
 playerColor' (-1) = (0, 0,42)        -- possible background color
